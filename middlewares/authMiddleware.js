@@ -2,51 +2,60 @@ import jwt from "jsonwebtoken";
 import prisma from "../db/db.js";
 
 const authMiddleware = async (req, res, next) => {
-  // 1. Get the token from the Authorization header
-  const header = req.headers.authorization;
-  console.log(header);
-  
-  if(header==null ||header==undefined) return res.status(402).json("not Authorization")
-  const token = header.split(" ")[1]
-  // 2. Check if token is provided
-  console.log(token);
-  
-  if (!token) {
-    return res.status(400).json({ message: "Token not provided" });
-  }
-
   try {
-    // 3. Decode the token and verify
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);    
-    // 4. If token is invalid or expired
-    if (!decoded) {
-      return res.status(401).json({ message: "Not authorized" });
+    // Validate Authorization header
+    const header = req.headers.authorization;
+    // console.log(header);
+
+    if (!header) {
+      return res
+        .status(401)
+        .json({ message: "Authorization header is missing" });
     }
 
-    // 5. Find the user in the database using the decoded user ID
-    const user = await prisma.users.findFirst({
-      where: { id: decoded.userId },  // Assuming your token has a userId field
+    // Extract token
+    const token = header.split(" ")[1];
+    if (!token) {
+      return res.status(400).json({ message: "Token not provided" });
+    }
+
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // console.log(decoded);
+
+    if (!decoded) {
+      return res.status(401).json({ message: "Invalid token payload" });
+    }
+
+    // Find user in the database
+    const user = await prisma.users.findUnique({
+      where: { id: parseInt(decoded) }, // Use `findUnique` for unique fields like `id`
       select: {
+        id: true,
         name: true,
         email: true,
-        createdAt:true,
-        profile:true
+        createdAt: true,
+        profile: true,
       },
     });
 
-    // 6. If no user is found
     if (!user) {
       return res.status(401).json({ message: "User not found" });
     }
 
-    // 7. Attach the user to the request object
+    // Attach user to the request
     req.user = user;
-    
-    // 8. Move to the next middleware or route handler
     next();
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ message: "Internal server error" });
+
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ message: "Token expired" });
+    } else if (error.name === "JsonWebTokenError") {
+      return res.status(401).json({ message: "Invalid token" });
+    }
+
+    return res.status(500).json(error.message);
   }
 };
 
