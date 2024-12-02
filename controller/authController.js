@@ -1,6 +1,7 @@
 import prisma from "../db/db.js";
 import bcrypt from "bcrypt";
 import generateToken from "../utils/generateJWT.js";
+import { sendEmail } from "../utils/mailer.js";
 
 const signup = async (req, res) => {
   const { name, email, password, confirmPassword } = req.body;
@@ -87,4 +88,23 @@ const login = async (req, res) => {
   }
 };
 
-export { signup, login };
+
+const sendTextEmail =async (req,res)=>{
+  try {
+    const{email} = req.query;
+    if(!email){
+      return res.status(400).json("email not provide")
+    }
+    const payload = {
+      toMail:email,
+      subject:"Welcome back to our website ",
+      body:`<h1> Hi Mr kartik this is only for testing</h1>`
+     
+    }
+   await sendEmail(payload.toMail,payload.subject,payload.body)
+   return res.status(200).json("Email send successfully ")
+  } catch (error) {
+    return res.status(500).json(error.message)
+  }
+}
+export { signup, login ,sendTextEmail};
